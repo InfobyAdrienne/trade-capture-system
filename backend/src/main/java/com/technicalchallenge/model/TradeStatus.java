@@ -10,6 +10,9 @@ import lombok.Setter;
 @Entity
 @Table(name = "trade_status")
 public class TradeStatus {
+    public TradeStatus() {
+    }
+
     public TradeStatus(String tradeStatus) {
         this.tradeStatus = tradeStatus;
     }

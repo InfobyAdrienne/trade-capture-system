@@ -5,16 +5,19 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.technicalchallenge.dto.TradeDTO;
 import com.technicalchallenge.mapper.TradeMapper;
 import com.technicalchallenge.model.Trade;
+import com.technicalchallenge.service.TradeSearchCriteria;
 import com.technicalchallenge.service.TradeService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
+import com.technicalchallenge.service.TradeSearchCriteria;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -22,6 +25,7 @@ import java.util.Optional;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -86,7 +90,7 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(get("/api/trades")
-                        .contentType(MediaType.APPLICATION_JSON))
+                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].tradeId", is(1001)))
@@ -103,7 +107,7 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(get("/api/trades/1001")
-                        .contentType(MediaType.APPLICATION_JSON))
+                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tradeId", is(1001)))
                 .andExpect(jsonPath("$.bookName", is("TestBook")))
@@ -119,10 +123,50 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(get("/api/trades/9999")
-                        .contentType(MediaType.APPLICATION_JSON))
+                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound());
 
         verify(tradeService).getTradeById(9999L);
+    }
+
+    @Test
+    void testGetTradesByCriteria() throws Exception {
+        // Stub the service (use matcher so instance equality isn't required)
+        when(tradeService.getTradesByCriteria(any(TradeSearchCriteria.class)))
+                .thenReturn(List.of(trade));
+
+        // When/Then: send criteria as query param(s)
+        mockMvc.perform(get("/api/trades/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .param("counterpartyName", "TestCounterparty"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].counterpartyName", is("TestCounterparty")));
+
+        ArgumentCaptor<TradeSearchCriteria> cap = ArgumentCaptor.forClass(TradeSearchCriteria.class);
+        verify(tradeService).getTradesByCriteria(cap.capture());
+        assertEquals("TestCounterparty", cap.getValue().getCounterpartyName());
+    }
+
+    @Test
+    void testGetTradesByCriteria_NoMatch() throws Exception {
+        // Stub the service (use matcher so instance equality isn't required)
+
+        // make this so that it doesnt return a false positive and return a list of 0
+        // either way
+        when(tradeService.getTradesByCriteria(any(TradeSearchCriteria.class)))
+                .thenReturn(List.of());
+
+        // When/Then: send criteria as query param(s)
+        mockMvc.perform(get("/api/trades/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .param("bookName", "NonExistentBook"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        ArgumentCaptor<TradeSearchCriteria> cap = ArgumentCaptor.forClass(TradeSearchCriteria.class);
+        verify(tradeService).getTradesByCriteria(cap.capture());
+        assertEquals("NonExistentBook", cap.getValue().getBookName());
     }
 
     @Test
@@ -133,8 +177,8 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(post("/api/trades")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(tradeDTO)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tradeDTO)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.tradeId", is(1001)));
 
@@ -152,8 +196,8 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(post("/api/trades")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidDTO)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidDTO)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("Trade date is required"));
 
@@ -170,8 +214,8 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(post("/api/trades")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidDTO)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidDTO)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("Book and Counterparty are required"));
 
@@ -188,8 +232,8 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(put("/api/trades/{id}", tradeId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(tradeDTO)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tradeDTO)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tradeId", is(1001)));
 
@@ -204,8 +248,8 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(put("/api/trades/{id}", pathId)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(tradeDTO)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(tradeDTO)))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("Trade ID in path must match Trade ID in request body"));
 
@@ -219,7 +263,7 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(delete("/api/trades/1001")
-                        .contentType(MediaType.APPLICATION_JSON))
+                .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNoContent());
 
         verify(tradeService).deleteTrade(1001L);
@@ -234,8 +278,8 @@ public class TradeControllerTest {
 
         // When/Then
         mockMvc.perform(post("/api/trades")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidDTO)))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(invalidDTO)))
                 .andExpect(status().isBadRequest());
 
         verify(tradeService, never()).createTrade(any(TradeDTO.class));

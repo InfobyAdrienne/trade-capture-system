@@ -3,10 +3,14 @@ package com.technicalchallenge.service;
 import com.technicalchallenge.dto.TradeDTO;
 import com.technicalchallenge.dto.TradeLegDTO;
 import com.technicalchallenge.model.*;
+import com.technicalchallenge.model.Trade;
 import com.technicalchallenge.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.technicalchallenge.specifications.TradeSpecifications;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -65,6 +69,12 @@ public class TradeService {
     public Optional<Trade> getTradeById(Long tradeId) {
         logger.debug("Retrieving trade by id: {}", tradeId);
         return tradeRepository.findByTradeIdAndActiveTrue(tradeId);
+    }
+
+    public List<Trade> getTradesByCriteria(TradeSearchCriteria criteria) {
+        logger.info("Searching trades with criteria: {}", criteria);
+        Specification<Trade> spec = TradeSpecifications.build(criteria);
+        return tradeRepository.findAll(spec);
     }
 
     @Transactional

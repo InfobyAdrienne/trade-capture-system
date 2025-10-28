@@ -83,6 +83,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Jakarta Persistence API -->
+        <dependency>
+            <groupId>jakarta.persistence</groupId>
+            <artifactId>jakarta.persistence-api</artifactId>
+            <version>3.1.0</version>
+        </dependency>
+
         <!-- Cucumber for BDD testing -->
         <dependency>
             <groupId>io.cucumber</groupId>

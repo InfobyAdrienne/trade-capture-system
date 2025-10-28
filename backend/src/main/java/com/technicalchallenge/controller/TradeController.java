@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import com.technicalchallenge.service.TradeSearchCriteria;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -70,6 +71,22 @@ public class TradeController {
                 .map(tradeMapper::toDto)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/search")
+    @Operation(summary = "Search trades",
+               description = "Search for trades based on various criteria.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Trades found and returned successfully",
+                    content = @Content(mediaType = "application/json",
+                                     schema = @Schema(implementation = TradeDTO.class))),
+        @ApiResponse(responseCode = "404", description = "No trades found matching the criteria"),
+        @ApiResponse(responseCode = "400", description = "Invalid search criteria format")
+    })
+    public List<TradeDTO> getTradesByCriteria(TradeSearchCriteria criteria) {
+    return tradeService.getTradesByCriteria(criteria).stream()
+        .map(tradeMapper::toDto)
+            .toList();
     }
 
     @PostMapping
