@@ -188,6 +188,49 @@ class TradeServiceTest {
     }
 
     @Test
+    void testGetTradesByCriteria() {
+        // Given
+        TradeSearchCriteria criteria = new TradeSearchCriteria();
+        criteria.setCounterpartyName("TestCounterparty");
+
+        // Stub repository call (you don't care what the spec looks like)
+        when(tradeRepository.findAll(ArgumentMatchers.<Specification<Trade>>any()))
+                .thenReturn(List.of(trade));
+
+        // When
+        List<Trade> result = tradeService.getTradesByCriteria(criteria);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertEquals(100001L, result.get(0).getTradeId());
+
+        // Verify repository call
+        verify(tradeRepository, times(1)).findAll(any(Specification.class));
+    }
+
+    @Test
+    void testGetTradesByCriteria_NoMatch() {
+        // Given
+        TradeSearchCriteria criteria = new TradeSearchCriteria();
+        criteria.setBookName("NonExistentBook");
+
+        // Stub repository call to return empty list
+        when(tradeRepository.findAll(ArgumentMatchers.<Specification<Trade>>any()))
+                .thenReturn(List.of());
+
+        // When
+        List<Trade> result = tradeService.getTradesByCriteria(criteria);
+
+        // Then
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+
+        // Verify repository call
+        verify(tradeRepository, times(1)).findAll(any(Specification.class));
+    }
+
+    @Test
     void testAmendTrade_Success() {
         // Given
         when(tradeRepository.findByTradeIdAndActiveTrue(100001L)).thenReturn(Optional.of(trade));

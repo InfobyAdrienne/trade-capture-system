@@ -14,10 +14,10 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.web.servlet.MockMvc;
-import com.technicalchallenge.service.TradeSearchCriteria;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -131,11 +131,10 @@ public class TradeControllerTest {
 
     @Test
     void testGetTradesByCriteria() throws Exception {
-        // Stub the service (use matcher so instance equality isn't required)
         when(tradeService.getTradesByCriteria(any(TradeSearchCriteria.class)))
                 .thenReturn(List.of(trade));
 
-        // When/Then: send criteria as query param(s)
+        // When/Then
         mockMvc.perform(get("/api/trades/search")
                 .contentType(MediaType.APPLICATION_JSON)
                 .param("counterpartyName", "TestCounterparty"))
@@ -150,23 +149,98 @@ public class TradeControllerTest {
 
     @Test
     void testGetTradesByCriteria_NoMatch() throws Exception {
-        // Stub the service (use matcher so instance equality isn't required)
+            when(tradeService.getTradesByCriteria(any(TradeSearchCriteria.class)))
+                            .thenReturn(List.of());
 
-        // make this so that it doesnt return a false positive and return a list of 0
-        // either way
-        when(tradeService.getTradesByCriteria(any(TradeSearchCriteria.class)))
-                .thenReturn(List.of());
+            // When/Then: send criteria as query param(s)
+            mockMvc.perform(get("/api/trades/search")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .param("bookName", "NonExistentBook"))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$", hasSize(0)));
+
+            ArgumentCaptor<TradeSearchCriteria> cap = ArgumentCaptor.forClass(TradeSearchCriteria.class);
+            verify(tradeService).getTradesByCriteria(cap.capture());
+            assertEquals("NonExistentBook", cap.getValue().getBookName());
+    }
+
+    @Test
+    void testGetTradesByFilter_Success() throws Exception {
+        when(tradeService.getTradesByFilter(any(TradeSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(trade)));
+
+        // When/Then
+        mockMvc.perform(get("/api/trades/filter")
+                .contentType(MediaType.APPLICATION_JSON)
+                .param("bookName", "TestBook")
+                .param("page", "0")
+                .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].bookName", is("TestBook")));
+
+        ArgumentCaptor<TradeSearchCriteria> capCriteria = ArgumentCaptor.forClass(TradeSearchCriteria.class);
+        ArgumentCaptor<Pageable> capPageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(tradeService).getTradesByFilter(capCriteria.capture(), capPageable.capture());
+        assertEquals("TestBook", capCriteria.getValue().getBookName());
+        assertEquals(0, capPageable.getValue().getPageNumber());
+        assertEquals(10, capPageable.getValue().getPageSize());
+    }
+
+    @Test
+    void testGetTradesByFilter_NoMatch() throws Exception {
+        // Stub the service
+        when(tradeService.getTradesByFilter(any(TradeSearchCriteria.class), any(Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of())); // asserting that what's returned in the content is 0
 
         // When/Then: send criteria as query param(s)
-        mockMvc.perform(get("/api/trades/search")
+        mockMvc.perform(get("/api/trades/filter")
                 .contentType(MediaType.APPLICATION_JSON)
-                .param("bookName", "NonExistentBook"))
+                .param("bookName", "TestBook")
+                .param("page", "0")
+                .param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(jsonPath("$.content", hasSize(0)));
 
-        ArgumentCaptor<TradeSearchCriteria> cap = ArgumentCaptor.forClass(TradeSearchCriteria.class);
-        verify(tradeService).getTradesByCriteria(cap.capture());
-        assertEquals("NonExistentBook", cap.getValue().getBookName());
+        ArgumentCaptor<TradeSearchCriteria> capCriteria = ArgumentCaptor.forClass(TradeSearchCriteria.class);
+        ArgumentCaptor<Pageable> capPageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(tradeService).getTradesByFilter(capCriteria.capture(), capPageable.capture());
+        // assertEquals("NonExistentCounterparty", capCriteria.getValue().getCounterpartyName());
+        assertEquals(0, capPageable.getValue().getPageNumber());
+        assertEquals(10, capPageable.getValue().getPageSize());
+    }
+
+    @Test
+    void testGetTradesByRsql() throws Exception {
+            // Given
+            String rsqlQuery = "bookName==TestBook";
+            when(tradeService.getTradesByRsql(rsqlQuery)).thenReturn(List.of(trade));
+
+            // When/Then
+            mockMvc.perform(get("/api/trades/rsql")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .param("query", rsqlQuery))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$", hasSize(1)))
+                            .andExpect(jsonPath("$[0].bookName", is("TestBook")));
+
+            verify(tradeService).getTradesByRsql(rsqlQuery);
+    }
+
+    @Test
+    void testGetTradesByRsql_NoMatch() throws Exception {
+        // Given
+        String rsqlQuery = "bookName==NonExistentBook";
+        when(tradeService.getTradesByRsql(rsqlQuery)).thenReturn(List.of()); 
+
+        // When/Then
+        mockMvc.perform(get("/api/trades/rsql")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .param("query", rsqlQuery))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$", hasSize(0)));
+
+        verify(tradeService).getTradesByRsql(rsqlQuery);
     }
 
     @Test
