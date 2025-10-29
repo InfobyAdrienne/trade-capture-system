@@ -13,6 +13,7 @@ import com.technicalchallenge.repository.CashflowRepository;
 import com.technicalchallenge.repository.TradeLegRepository;
 import com.technicalchallenge.repository.TradeRepository;
 import com.technicalchallenge.repository.TradeStatusRepository;
+import com.technicalchallenge.specifications.TradeSpecifications;
 import com.technicalchallenge.repository.CounterpartyRepository;
 import com.technicalchallenge.repository.ApplicationUserRepository;
 import com.technicalchallenge.model.Schedule;
@@ -24,12 +25,15 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.jpa.domain.Specification;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -85,6 +89,7 @@ class TradeServiceTest {
         tradeDTO.setTradeDate(LocalDate.of(2025, 1, 15));
         tradeDTO.setTradeStartDate(LocalDate.of(2025, 1, 17));
         tradeDTO.setTradeMaturityDate(LocalDate.of(2026, 1, 17));
+        tradeDTO.setCounterpartyName("TestCounterparty");
 
         TradeLegDTO leg1 = new TradeLegDTO();
         leg1.setNotional(BigDecimal.valueOf(1000000));
@@ -180,6 +185,49 @@ class TradeServiceTest {
 
         // Then
         assertFalse(result.isPresent());
+    }
+
+    @Test
+    void testGetTradesByCriteria() {
+        // Given
+        TradeSearchCriteria criteria = new TradeSearchCriteria();
+        criteria.setCounterpartyName("TestCounterparty");
+
+        // Stub repository call (you don't care what the spec looks like)
+        when(tradeRepository.findAll(ArgumentMatchers.<Specification<Trade>>any()))
+                .thenReturn(List.of(trade));
+
+        // When
+        List<Trade> result = tradeService.getTradesByCriteria(criteria);
+
+        // Then
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        assertEquals(100001L, result.get(0).getTradeId());
+
+        // Verify repository call
+        verify(tradeRepository, times(1)).findAll(any(Specification.class));
+    }
+
+    @Test
+    void testGetTradesByCriteria_NoMatch() {
+        // Given
+        TradeSearchCriteria criteria = new TradeSearchCriteria();
+        criteria.setBookName("NonExistentBook");
+
+        // Stub repository call to return empty list
+        when(tradeRepository.findAll(ArgumentMatchers.<Specification<Trade>>any()))
+                .thenReturn(List.of());
+
+        // When
+        List<Trade> result = tradeService.getTradesByCriteria(criteria);
+
+        // Then
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+
+        // Verify repository call
+        verify(tradeRepository, times(1)).findAll(any(Specification.class));
     }
 
     @Test
