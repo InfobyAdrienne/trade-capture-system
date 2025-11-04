@@ -4,7 +4,11 @@ import com.technicalchallenge.dto.TradeDTO;
 import com.technicalchallenge.dto.TradeLegDTO;
 import com.technicalchallenge.model.*;
 import com.technicalchallenge.repository.*;
+import com.technicalchallenge.service.validation.TradeValidationService;
+import com.technicalchallenge.service.validation.ValidationResult;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.security.SecurityProperties.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -106,8 +110,23 @@ public class TradeService {
             logger.info("Generated trade ID: {}", generatedTradeId);
         }
 
-        // Validate business rules
-        validateTradeCreation(tradeDTO);
+        // Trade Validation Service 
+        TradeValidationService tradeValidationService = new TradeValidationService(counterpartyRepository,
+                bookRepository, applicationUserRepository);
+        
+         // Validate business rules
+        ValidationResult validationResult = tradeValidationService.validateTradeBusinessRules(tradeDTO);
+        if (!validationResult.isValid()) {
+            String errorMessages = String.join("; ", validationResult.getErrors());
+            throw new RuntimeException("Trade validation failed: " + errorMessages);
+        }
+
+        // Validate trade legs
+        ValidationResult legValidationResult = tradeValidationService.validateTradeLegConsistency(tradeDTO.getTradeLegs());
+        if (!legValidationResult.isValid()) {
+            String errorMessages = String.join("; ", legValidationResult.getErrors());
+            throw new RuntimeException("Trade leg validation failed: " + errorMessages);
+        }
 
         // Create trade entity
         Trade trade = mapDTOToEntity(tradeDTO);
@@ -370,16 +389,24 @@ public class TradeService {
 
     private void validateTradeCreation(TradeDTO tradeDTO) {
         // Validate dates - Fixed to use consistent field names
-        if (tradeDTO.getTradeStartDate() != null && tradeDTO.getTradeDate() != null) {
-            if (tradeDTO.getTradeStartDate().isBefore(tradeDTO.getTradeDate())) {
-                throw new RuntimeException("Start date cannot be before trade date");
-            }
-        }
-        if (tradeDTO.getTradeMaturityDate() != null && tradeDTO.getTradeStartDate() != null) {
-            if (tradeDTO.getTradeMaturityDate().isBefore(tradeDTO.getTradeStartDate())) {
-                throw new RuntimeException("Maturity date cannot be before start date");
-            }
-        }
+        // if (tradeDTO.getTradeStartDate() != null && tradeDTO.getTradeDate() != null) {
+        //     if (tradeDTO.getTradeStartDate().isBefore(tradeDTO.getTradeDate())) {
+        //         throw new RuntimeException("Start date cannot be before trade date");
+        //     }
+        // }
+        // if (tradeDTO.getTradeMaturityDate() != null && tradeDTO.getTradeStartDate() != null) {
+        //     if (tradeDTO.getTradeMaturityDate().isBefore(tradeDTO.getTradeStartDate())) {
+        //         throw new RuntimeException("Maturity date cannot be before start date");
+        //     }
+        // }
+
+        // // This is the only new thing in the validation
+        // if (tradeDTO.getTradeDate() != null) {
+        //     LocalDate now = LocalDate.now();
+        //     if (tradeDTO.getTradeDate().isBefore(now.minusDays(30))) {
+        //         throw new RuntimeException("Trade date cannot be more than 30 days in the past");
+        //     }
+        // }
 
         // Validate trade has exactly 2 legs
         if (tradeDTO.getTradeLegs() == null || tradeDTO.getTradeLegs().size() != 2) {
