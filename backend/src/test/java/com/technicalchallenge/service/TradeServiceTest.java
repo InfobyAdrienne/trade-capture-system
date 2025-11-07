@@ -14,6 +14,10 @@ import com.technicalchallenge.repository.TradeLegRepository;
 import com.technicalchallenge.repository.TradeRepository;
 import com.technicalchallenge.repository.TradeStatusRepository;
 import com.technicalchallenge.specifications.TradeSpecifications;
+
+import io.cucumber.java.lu.a;
+import io.micrometer.core.instrument.Counter;
+
 import com.technicalchallenge.repository.CounterpartyRepository;
 import com.technicalchallenge.repository.ApplicationUserRepository;
 import com.technicalchallenge.model.Schedule;
@@ -78,32 +82,52 @@ class TradeServiceTest {
     @InjectMocks
     private TradeService tradeService;
 
+    @Mock
+    private AuthorizationService authorizationService;
+
     private TradeDTO tradeDTO;
     private Trade trade;
+    private Book book;
+    private Counterparty counterparty;
+    private ApplicationUser applicationUser;
 
     @BeforeEach
     void setUp() {
         // Set up test data
         tradeDTO = new TradeDTO();
         tradeDTO.setTradeId(100001L);
-        tradeDTO.setTradeDate(LocalDate.of(2025, 1, 15));
-        tradeDTO.setTradeStartDate(LocalDate.of(2025, 1, 17));
-        tradeDTO.setTradeMaturityDate(LocalDate.of(2026, 1, 17));
-        tradeDTO.setCounterpartyName("TestCounterparty");
+        tradeDTO.setTradeDate(LocalDate.of(2025, 10, 15));
+        tradeDTO.setTradeStartDate(LocalDate.of(2025, 10, 17));
+        tradeDTO.setTradeMaturityDate(LocalDate.of(2026, 10, 17));
+        tradeDTO.setTraderUserId(1L);
 
         TradeLegDTO leg1 = new TradeLegDTO();
         leg1.setNotional(BigDecimal.valueOf(1000000));
         leg1.setRate(0.05);
+        leg1.setMaturityDate(LocalDate.of(2026, 10, 17));
 
         TradeLegDTO leg2 = new TradeLegDTO();
         leg2.setNotional(BigDecimal.valueOf(1000000));
         leg2.setRate(0.0);
+        leg2.setMaturityDate(LocalDate.of(2026, 10, 17));
 
         tradeDTO.setTradeLegs(Arrays.asList(leg1, leg2));
 
         trade = new Trade();
         trade.setId(1L);
         trade.setTradeId(100001L);
+
+        book = new Book();
+        book.setId(1L);
+        book.setActive(true);
+
+        counterparty = new Counterparty();
+        counterparty.setId(1L);
+        counterparty.setActive(true);
+
+        applicationUser = new ApplicationUser();
+        applicationUser.setId(1L);
+        applicationUser.setActive(true);
     }
 
     @Test
@@ -114,18 +138,23 @@ class TradeServiceTest {
         when(tradeLegRepository.save(any(TradeLeg.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        when(bookRepository.findByBookName("TestBook"))
-                .thenReturn(Optional.of(new Book()));
+        when(applicationUserRepository.findById(1L))
+                .thenReturn(Optional.of(applicationUser));
 
-        when(counterpartyRepository.findByName("TestCounterparty"))
-                .thenReturn(Optional.of(new Counterparty()));
+        when(bookRepository.findById(1L))
+                .thenReturn(Optional.of(book));
+
+        when(counterpartyRepository.findById(1L))
+                .thenReturn(Optional.of(counterparty));
 
         when(tradeStatusRepository.findByTradeStatus("LIVE"))
                 .thenReturn(Optional.of(new TradeStatus("LIVE")));
 
-        tradeDTO.setBookName("TestBook");
-        tradeDTO.setCounterpartyName("TestCounterparty");
+        tradeDTO.setBookId(1L);
+        tradeDTO.setCounterpartyId(1L);
         tradeDTO.setTradeStatus("LIVE");
+
+        when(authorizationService.validateUserPrivileges(1L, "CREATE_TRADE")).thenReturn(true);
 
         // When
         Trade result = tradeService.createTrade(tradeDTO);
@@ -137,9 +166,38 @@ class TradeServiceTest {
     }
 
     @Test
+    void testCreateTrade_InactiveBook_ShouldFail() {
+        // Given
+        book.setActive(false);
+
+        when(applicationUserRepository.findById(1L))
+                .thenReturn(Optional.of(applicationUser));
+
+        when(bookRepository.findById(1L))
+                .thenReturn(Optional.of(book));
+
+        when(counterpartyRepository.findById(1L))
+                .thenReturn(Optional.of(counterparty));
+
+        tradeDTO.setBookId(1L);
+        tradeDTO.setCounterpartyId(1L);
+
+        when(authorizationService.validateUserPrivileges(1L, "CREATE_TRADE")).thenReturn(true);
+
+        // When & Then
+        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+            tradeService.createTrade(tradeDTO);
+        });
+
+        assertEquals("Trade validation failed: Book must be active.", exception.getMessage());
+    }
+
+    @Test
     void testCreateTrade_InvalidDates_ShouldFail() {
         // Given
         tradeDTO.setTradeStartDate(LocalDate.of(2025, 1, 10)); // Before tradeDate that is set in BeforeEach
+
+        when(authorizationService.validateUserPrivileges(1L, "CREATE_TRADE")).thenReturn(true);
 
         // When & Then
         RuntimeException exception = assertThrows(RuntimeException.class, () -> {
@@ -152,14 +210,29 @@ class TradeServiceTest {
     @Test
     void testCreateTrade_InvalidLegCount_ShouldFail() {
         // Given
-        tradeDTO.setTradeLegs(Arrays.asList(new TradeLegDTO())); // Only 1 leg
+        tradeDTO.setTradeLegs(Arrays.asList(tradeDTO.getTradeLegs().get(0)));
+
+        when(applicationUserRepository.findById(1L))
+                .thenReturn(Optional.of(applicationUser));
+
+        when(bookRepository.findById(1L))
+                .thenReturn(Optional.of(book));
+
+        when(counterpartyRepository.findById(1L))
+                .thenReturn(Optional.of(counterparty));
+
+        tradeDTO.setBookId(1L);
+        tradeDTO.setCounterpartyId(1L);
+
+        when(authorizationService.validateUserPrivileges(1L, "CREATE_TRADE")).thenReturn(true);
 
         // When & Then
         RuntimeException exception = assertThrows(RuntimeException.class, () -> {
             tradeService.createTrade(tradeDTO);
         });
 
-        assertTrue(exception.getMessage().contains("exactly 2 legs"));
+        // Then
+        assertEquals("Trade must have exactly two legs", exception.getMessage());
     }
 
     @Test
@@ -233,21 +306,33 @@ class TradeServiceTest {
     @Test
     void testAmendTrade_Success() {
         // Given
+        when(applicationUserRepository.findById(1L))
+                .thenReturn(Optional.of(applicationUser));
+
         when(tradeRepository.findByTradeIdAndActiveTrue(100001L)).thenReturn(Optional.of(trade));
+
         when(tradeRepository.save(any(Trade.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+
         when(tradeStatusRepository.findByTradeStatus("AMENDED"))
                 .thenAnswer(invocation -> Optional.of(new TradeStatus("AMENDED")));
+
         when(tradeLegRepository.save(any(TradeLeg.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         // set version of the existing trade
         trade.setVersion(1);
         trade.setTradeStatus(new TradeStatus("LIVE"));
+        trade.setTraderUser(applicationUser);
+
+        when(authorizationService.validateUserPrivileges(1L, "AMEND_TRADE")).thenReturn(true);
+
 
         TradeStatus amendedStatus = new TradeStatus("AMENDED");
         when(tradeStatusRepository.findByTradeStatus("AMENDED"))
                 .thenReturn(Optional.of(amendedStatus));
+
+        when(authorizationService.validateUserPrivileges(1L, "AMEND_TRADE")).thenReturn(true);
 
         // When
         Trade result = tradeService.amendTrade(100001L, tradeDTO);

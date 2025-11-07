@@ -11,6 +11,7 @@ import lombok.Setter;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Getter
@@ -56,6 +57,9 @@ public class TradeLegDTO {
     // Pay/Receive reference
     private Long payRecId;
     private String payReceiveFlag;
+
+    // Maturity date
+    private LocalDate maturityDate;
 
     // Associated cashflows
     private List<CashflowDTO> cashflows;
