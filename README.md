@@ -1,5 +1,10 @@
 # Trading Application Technical Challenge
 
+## Submission
+The challenge was submitted on Friday 7th November 2025.
+
+Please refer to the accompanying documentation for Setting Up `setting-up.md`, Test Cases Fixes `test-fixes.md` and Missing Functionality `missing-functionality.md`.
+
 ## Welcome to the Challenge!
 
 This technical challenge is designed to assess your software development skills across multiple domains including backend development, frontend integration, debugging, full-stack feature implementation, and cloud architecture understanding.
