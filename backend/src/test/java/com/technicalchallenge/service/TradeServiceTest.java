@@ -82,6 +82,9 @@ class TradeServiceTest {
     @InjectMocks
     private TradeService tradeService;
 
+    @Mock
+    private AuthorizationService authorizationService;
+
     private TradeDTO tradeDTO;
     private Trade trade;
     private Book book;
@@ -96,6 +99,7 @@ class TradeServiceTest {
         tradeDTO.setTradeDate(LocalDate.of(2025, 10, 15));
         tradeDTO.setTradeStartDate(LocalDate.of(2025, 10, 17));
         tradeDTO.setTradeMaturityDate(LocalDate.of(2026, 10, 17));
+        tradeDTO.setTraderUserId(1L);
 
         TradeLegDTO leg1 = new TradeLegDTO();
         leg1.setNotional(BigDecimal.valueOf(1000000));
@@ -148,8 +152,9 @@ class TradeServiceTest {
 
         tradeDTO.setBookId(1L);
         tradeDTO.setCounterpartyId(1L);
-        tradeDTO.setTraderUserId(1L);
         tradeDTO.setTradeStatus("LIVE");
+
+        when(authorizationService.validateUserPrivileges(1L, "CREATE_TRADE")).thenReturn(true);
 
         // When
         Trade result = tradeService.createTrade(tradeDTO);
@@ -174,9 +179,10 @@ class TradeServiceTest {
         when(counterpartyRepository.findById(1L))
                 .thenReturn(Optional.of(counterparty));
 
-        tradeDTO.setTraderUserId(1L);
         tradeDTO.setBookId(1L);
         tradeDTO.setCounterpartyId(1L);
+
+        when(authorizationService.validateUserPrivileges(1L, "CREATE_TRADE")).thenReturn(true);
 
         // When & Then
         RuntimeException exception = assertThrows(RuntimeException.class, () -> {
@@ -191,6 +197,8 @@ class TradeServiceTest {
         // Given
         tradeDTO.setTradeStartDate(LocalDate.of(2025, 1, 10)); // Before tradeDate that is set in BeforeEach
 
+        when(authorizationService.validateUserPrivileges(1L, "CREATE_TRADE")).thenReturn(true);
+
         // When & Then
         RuntimeException exception = assertThrows(RuntimeException.class, () -> {
             tradeService.createTrade(tradeDTO);
@@ -203,7 +211,7 @@ class TradeServiceTest {
     void testCreateTrade_InvalidLegCount_ShouldFail() {
         // Given
         tradeDTO.setTradeLegs(Arrays.asList(tradeDTO.getTradeLegs().get(0)));
-    
+
         when(applicationUserRepository.findById(1L))
                 .thenReturn(Optional.of(applicationUser));
 
@@ -213,9 +221,10 @@ class TradeServiceTest {
         when(counterpartyRepository.findById(1L))
                 .thenReturn(Optional.of(counterparty));
 
-        tradeDTO.setTraderUserId(1L);
         tradeDTO.setBookId(1L);
         tradeDTO.setCounterpartyId(1L);
+
+        when(authorizationService.validateUserPrivileges(1L, "CREATE_TRADE")).thenReturn(true);
 
         // When & Then
         RuntimeException exception = assertThrows(RuntimeException.class, () -> {
@@ -297,21 +306,33 @@ class TradeServiceTest {
     @Test
     void testAmendTrade_Success() {
         // Given
+        when(applicationUserRepository.findById(1L))
+                .thenReturn(Optional.of(applicationUser));
+
         when(tradeRepository.findByTradeIdAndActiveTrue(100001L)).thenReturn(Optional.of(trade));
+
         when(tradeRepository.save(any(Trade.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+
         when(tradeStatusRepository.findByTradeStatus("AMENDED"))
                 .thenAnswer(invocation -> Optional.of(new TradeStatus("AMENDED")));
+
         when(tradeLegRepository.save(any(TradeLeg.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         // set version of the existing trade
         trade.setVersion(1);
         trade.setTradeStatus(new TradeStatus("LIVE"));
+        trade.setTraderUser(applicationUser);
+
+        when(authorizationService.validateUserPrivileges(1L, "AMEND_TRADE")).thenReturn(true);
+
 
         TradeStatus amendedStatus = new TradeStatus("AMENDED");
         when(tradeStatusRepository.findByTradeStatus("AMENDED"))
                 .thenReturn(Optional.of(amendedStatus));
+
+        when(authorizationService.validateUserPrivileges(1L, "AMEND_TRADE")).thenReturn(true);
 
         // When
         Trade result = tradeService.amendTrade(100001L, tradeDTO);

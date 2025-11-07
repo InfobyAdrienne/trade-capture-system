@@ -330,18 +330,18 @@ public class TradeControllerTest {
         verify(tradeService, never()).saveTrade(any(Trade.class), any(TradeDTO.class));
     }
 
-    @Test
-    void testDeleteTrade() throws Exception {
+@Test
+void testDeleteTrade() throws Exception {
         // Given
         doNothing().when(tradeService).deleteTrade(1001L);
 
         // When/Then
         mockMvc.perform(delete("/api/trades/1001")
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isNoContent());
+                        .contentType(MediaType.APPLICATION_JSON))
+                        .andExpect(status().isNoContent());
 
         verify(tradeService).deleteTrade(1001L);
-    }
+}
 
     @Test
     void testCreateTradeWithValidationErrors() throws Exception {

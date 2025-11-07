@@ -70,6 +70,14 @@ public class TradeService {
     private PayRecRepository payRecRepository;
     @Autowired
     private AdditionalInfoService additionalInfoService;
+    @Autowired
+    private AuthorizationService authorizationService;
+
+    private void authorize(Long traderUserId, String operation) {
+        if (!authorizationService.validateUserPrivileges(traderUserId, operation)) {
+            throw new SecurityException("User not authorized for operation: " + operation);
+        }
+    }
 
     public List<Trade> getAllTrades() {
         logger.info("Retrieving all trades");
@@ -100,6 +108,12 @@ public class TradeService {
 
     @Transactional
     public Trade createTrade(TradeDTO tradeDTO) {
+        if (tradeDTO.getTraderUserId() == null) {
+            throw new IllegalArgumentException("Trader user id is required to create a trade");
+        }
+
+        authorize(tradeDTO.getTraderUserId(), "CREATE_TRADE");
+
         logger.info("Creating new trade with ID: {}", tradeDTO.getTradeId());
 
         // Generate trade ID if not provided
@@ -110,11 +124,11 @@ public class TradeService {
             logger.info("Generated trade ID: {}", generatedTradeId);
         }
 
-        // Trade Validation Service 
+        // Trade Validation Service
         TradeValidationService tradeValidationService = new TradeValidationService(counterpartyRepository,
                 bookRepository, applicationUserRepository);
-        
-         // Validate business rules
+
+        // Validate business rules
         ValidationResult validationResult = tradeValidationService.validateTradeBusinessRules(tradeDTO);
         if (!validationResult.isValid()) {
             String errorMessages = String.join("; ", validationResult.getErrors());
@@ -122,7 +136,8 @@ public class TradeService {
         }
 
         // Validate trade legs
-        ValidationResult legValidationResult = tradeValidationService.validateTradeLegConsistency(tradeDTO.getTradeLegs());
+        ValidationResult legValidationResult = tradeValidationService
+                .validateTradeLegConsistency(tradeDTO.getTradeLegs());
         if (!legValidationResult.isValid()) {
             String errorMessages = String.join("; ", legValidationResult.getErrors());
             throw new RuntimeException("Trade leg validation failed: " + errorMessages);
@@ -304,6 +319,13 @@ public class TradeService {
     // NEW METHOD: Delete trade (mark as cancelled)
     @Transactional
     public void deleteTrade(Long tradeId) {
+        Trade trade = tradeRepository.findById(tradeId)
+                .orElseThrow(() -> new RuntimeException("Trade not found: " + tradeId));
+
+        Long userId = trade.getTraderUser().getId();
+
+        authorize(userId, "DELETE_TRADE");
+
         logger.info("Deleting (cancelling) trade with ID: {}", tradeId);
         cancelTrade(tradeId);
     }
@@ -318,6 +340,13 @@ public class TradeService {
         }
 
         Trade existingTrade = existingTradeOpt.get();
+
+        if (existingTrade.getTraderUser() == null) {
+            throw new RuntimeException("Trader user not set for trade: " + tradeId);
+        }
+        Long userId = existingTrade.getTraderUser().getId();
+
+        authorize(userId, "AMEND_TRADE");
 
         // Deactivate existing trade
         existingTrade.setActive(false);
@@ -359,6 +388,11 @@ public class TradeService {
         }
 
         Trade trade = tradeOpt.get();
+
+        Long userId = trade.getTraderUser().getId();
+
+        authorize(userId, "TERMINATE_TRADE");
+
         TradeStatus terminatedStatus = tradeStatusRepository.findByTradeStatus("TERMINATED")
                 .orElseThrow(() -> new RuntimeException("TERMINATED status not found"));
 
@@ -378,6 +412,11 @@ public class TradeService {
         }
 
         Trade trade = tradeOpt.get();
+
+        Long userId = trade.getTraderUser().getId();
+
+        authorize(userId, "CANCEL_TRADE");
+
         TradeStatus cancelledStatus = tradeStatusRepository.findByTradeStatus("CANCELLED")
                 .orElseThrow(() -> new RuntimeException("CANCELLED status not found"));
 
@@ -385,33 +424,6 @@ public class TradeService {
         trade.setLastTouchTimestamp(LocalDateTime.now());
 
         return tradeRepository.save(trade);
-    }
-
-    private void validateTradeCreation(TradeDTO tradeDTO) {
-        // Validate dates - Fixed to use consistent field names
-        // if (tradeDTO.getTradeStartDate() != null && tradeDTO.getTradeDate() != null) {
-        //     if (tradeDTO.getTradeStartDate().isBefore(tradeDTO.getTradeDate())) {
-        //         throw new RuntimeException("Start date cannot be before trade date");
-        //     }
-        // }
-        // if (tradeDTO.getTradeMaturityDate() != null && tradeDTO.getTradeStartDate() != null) {
-        //     if (tradeDTO.getTradeMaturityDate().isBefore(tradeDTO.getTradeStartDate())) {
-        //         throw new RuntimeException("Maturity date cannot be before start date");
-        //     }
-        // }
-
-        // // This is the only new thing in the validation
-        // if (tradeDTO.getTradeDate() != null) {
-        //     LocalDate now = LocalDate.now();
-        //     if (tradeDTO.getTradeDate().isBefore(now.minusDays(30))) {
-        //         throw new RuntimeException("Trade date cannot be more than 30 days in the past");
-        //     }
-        // }
-
-        // Validate trade has exactly 2 legs
-        if (tradeDTO.getTradeLegs() == null || tradeDTO.getTradeLegs().size() != 2) {
-            throw new RuntimeException("Trade must have exactly 2 legs");
-        }
     }
 
     private Trade mapDTOToEntity(TradeDTO dto) {
