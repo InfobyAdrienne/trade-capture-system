@@ -1,4 +1,4 @@
-This document addresses some notes from Step 3: Fix Failing Test Cases
+This document addresses some notes from Step 3: Implement Missing Functionality
 
 ### Multi-criteria Trade Search Endpoint
 
